@@ -34,6 +34,7 @@ async function register({
     zip_code,
     city,
     country,
+    role: 'standard',
   });
 
   return {
@@ -41,6 +42,7 @@ async function register({
     email: user.email,
     first_name: user.first_name,
     last_name: user.last_name,
+    role: user.role,
   };
 }
 
@@ -59,9 +61,13 @@ async function login({ email, password }) {
     throw error;
   }
 
-  const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, {
-    expiresIn: '24h',
-  });
+  const token = jwt.sign(
+    { id: user.id, email: user.email, role: user.role },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: '24h',
+    }
+  );
 
   return { token };
 }
@@ -79,6 +85,7 @@ async function getMe(userId) {
       'city',
       'country',
       'logo_data',
+      'role',
       'created_at',
     ],
   });

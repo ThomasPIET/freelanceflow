@@ -80,7 +80,22 @@ describe('Auth Routes', () => {
         zip_code: '75001',
         city: 'Paris',
         country: 'France',
+        role: 'standard',
       });
+    });
+
+    it('should always create a standard account, even if role is sent', async () => {
+      User.findOne.mockResolvedValue(null);
+      bcrypt.hash.mockResolvedValue('hashed_password');
+      User.create.mockResolvedValue({ id: 2, email: 'new@test.com', role: 'standard' });
+
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({ ...registerData, role: 'admin' });
+
+      expect(res.status).toBe(201);
+      expect(User.create).toHaveBeenCalledWith(expect.objectContaining({ role: 'standard' }));
+      expect(res.body.role).toBe('standard');
     });
 
     it('should return 409 if email already exists', async () => {
@@ -111,6 +126,20 @@ describe('Auth Routes', () => {
       expect(res.body).toHaveProperty('token');
       const decoded = jwt.verify(res.body.token, JWT_SECRET);
       expect(decoded.id).toBe(1);
+    });
+
+    it('should put the role in the token', async () => {
+      User.findOne.mockResolvedValue({
+        id: 1,
+        email: 'admin@test.com',
+        password_hash: 'hashed_password',
+        role: 'admin',
+      });
+      bcrypt.compare.mockResolvedValue(true);
+
+      const res = await request(app).post('/api/auth/login').send(loginData);
+
+      expect(jwt.verify(res.body.token, JWT_SECRET).role).toBe('admin');
     });
 
     it('should return 401 with wrong email', async () => {
@@ -157,6 +186,17 @@ describe('Auth Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.email).toBe('test@test.com');
+    });
+
+    it('should request the role attribute', async () => {
+      User.findByPk.mockResolvedValue({ id: 1, email: 'test@test.com', role: 'standard' });
+
+      const res = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${generateToken()}`);
+
+      expect(res.body.role).toBe('standard');
+      expect(User.findByPk.mock.calls[0][1].attributes).toContain('role');
     });
 
     it('should return 401 without token', async () => {
