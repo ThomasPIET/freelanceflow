@@ -167,3 +167,16 @@ def test_non_integer_id_returns_422_with_message(client):
     response = client.delete("/users/abc", headers=bearer(1, "admin"))
     assert response.status_code == 422
     assert "message" in response.json()
+
+
+def test_unexpected_error_returns_500_with_message(repo, monkeypatch):
+    def boom(_user_id):
+        raise RuntimeError("database exploded")
+
+    monkeypatch.setattr(repo, "delete_user", boom)
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.delete("/users/me", headers=bearer(2, "standard"))
+
+    assert response.status_code == 500
+    assert response.json() == {"message": "Internal Server Error"}

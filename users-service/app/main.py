@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
@@ -8,6 +9,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app import config
 from app.auth import AdminUser, AuthenticatedUser
 from app.repository import PostgresUserRepository, UserRepository
+
+logger = logging.getLogger("users-service")
 
 app = FastAPI(title="FreelanceFlow users-service")
 
@@ -27,6 +30,12 @@ async def http_error_handler(_request: Request, exc: StarletteHTTPException) -> 
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(_request: Request, _exc: RequestValidationError) -> JSONResponse:
     return JSONResponse(status_code=422, content={"message": "Invalid request"})
+
+
+@app.exception_handler(Exception)
+async def unexpected_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+    logger.exception("Unexpected error", exc_info=exc)
+    return JSONResponse(status_code=500, content={"message": "Internal Server Error"})
 
 
 @app.get("/health")
