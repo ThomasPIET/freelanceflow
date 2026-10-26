@@ -3,46 +3,91 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: freelanceFlow
-      POSTGRES_PASSWORD: freelanceFlow
-      POSTGRES_DB: freelanceFlow
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER manquant dans .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant dans .env}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB manquant dans .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U freelanceFlow"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - db
 
   backend:
     build: ./back
     restart: unless-stopped
-    ports:
-      - "3000:3000"
-    env_file:
-      - ./back/.env
     environment:
-      DATABASE_URL: postgresql://freelanceFlow:freelanceFlow@db:5432/freelanceFlow
       NODE_ENV: development
-    command: sh -c "npx sequelize-cli db:migrate && node server.js"
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant dans .env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL manquant dans .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD manquant dans .env}
+      PDF_SERVICE_URL: http://pdf-service:3000
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_SECURE: "false"
+      MAIL_FROM: factures@freelanceflow.local
+    command: sh -c "npx sequelize-cli db:migrate && node scripts/create-admin.js && node server.js"
     depends_on:
       db:
         condition: service_healthy
+      pdf-service:
+        condition: service_started
+      mailpit:
+        condition: service_started
+    networks:
+      - app
+      - db
+
+  users-service:
+    build: ./users-service
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant dans .env}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app
+      - db
+
+  pdf-service:
+    build: ./pdf-service
+    restart: unless-stopped
+    networks:
+      - app
+
+  mailpit:
+    image: axllent/mailpit:v1.32.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"
+    networks:
+      - app
 
   frontend:
     build:
       context: ./front
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:3000/api
+        BACKEND_URL: http://backend:3000
+        USERS_SERVICE_URL: http://users-service:8000
     restart: unless-stopped
     ports:
       - "3001:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3000/api
     depends_on:
       - backend
+      - users-service
+    networks:
+      - app
+
+networks:
+  app:
+  db:
+    internal: true
 
 volumes:
   pgdata:

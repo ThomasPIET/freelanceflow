@@ -1,68 +1,40 @@
-# FreelanceFlow - Docker Compose
+# FreelanceFlow
 
-Ce repo permet de lancer l'ensemble de l'application FreelanceFlow (frontend, backend, base de donnees) via Docker Compose.
+Application de facturation pour freelances, découpée en micro-services et lancée avec Docker Compose.
 
-## Prerequis
+## Architecture
 
-- [Docker](https://docs.docker.com/get-docker/) et [Docker Compose](https://docs.docker.com/compose/install/) installes sur votre machine
-- Un acces aux repos GitHub du projet
+| Service | Langage | Rôle | Port interne | Publié |
+|---|---|---|---|---|
+| `frontend` | Next.js (TypeScript) | Interface web ; relaie `/api/*` vers les services internes | 3000 | `localhost:3001` |
+| `backend` | Node.js / Express | Authentification (JWT, rôles), clients, prestations, factures, envoi des e-mails | 3000 | non |
+| `users-service` | Python / FastAPI | Suppression de son compte, administration des comptes | 8000 | non |
+| `pdf-service` | Node.js / Express | Génération des factures PDF (sans état) | 3000 | non |
+| `db` | PostgreSQL 16 | Données persistantes | 5432 | non |
+| `mailpit` | — | Boîte mail de test (capte les e-mails envoyés) | 1025 / 8025 | `127.0.0.1:8025` |
+
+Seul le frontend est joignable par les clients. Les backends et la base sont sur des réseaux Docker internes
+(`app` et `db`, ce dernier sans accès Internet).
+
+## Prérequis
+
+- [Docker](https://docs.docker.com/get-docker/) et Docker Compose
 
 ## Installation
 
-### 1. Cloner ce repo
-
 ```bash
-git clone git@github.com:freelanceFlow/docker-compose.git freelanceFlow
+git clone <url-du-depot> freelanceFlow
 cd freelanceFlow
+cp .env.example .env
 ```
 
-### 2. Cloner les repos front et back a l'interieur
+Dans `.env`, remplacer les valeurs `change-me` :
 
-```bash
-git clone git@github.com:freelanceFlow/back.git
-git clone git@github.com:freelanceFlow/front.git
-```
+- `JWT_SECRET` : générer une clé avec `openssl rand -hex 32` ;
+- `ADMIN_EMAIL` / `ADMIN_PASSWORD` : identifiants du compte administrateur créé au démarrage ;
+- `POSTGRES_PASSWORD` : mot de passe de la base.
 
-Vous devez obtenir la structure suivante :
-
-```
-freelanceFlow/
-├── back/
-├── front/
-├── docker-compose.yml
-└── README.md
-```
-
-### 3. Configurer les variables d'environnement
-
-#### Backend
-
-Creer le fichier `back/.env` :
-
-```bash
-cp back/.env.example back/.env
-```
-
-Ou le creer manuellement avec le contenu suivant :
-
-```env
-PORT=3000
-NODE_ENV=development
-
-DATABASE_URL=postgresql://freelanceFlow:freelanceFlow@db:5432/freelanceFlow
-
-JWT_SECRET=votre-secret-jwt-ici
-JWT_EXPIRES_IN=24h
-```
-
-> **Important** : remplacez `votre-secret-jwt-ici` par une vraie cle secrete. Vous pouvez en generer une avec :
-> ```bash
-> openssl rand -hex 32
-> ```
-
-#### Frontend
-
-Aucune configuration necessaire. La variable `NEXT_PUBLIC_API_URL` est configuree automatiquement par le `docker-compose.yml`.
+`docker compose` refuse de démarrer si une de ces variables manque.
 
 ## Lancement
 
@@ -70,24 +42,40 @@ Aucune configuration necessaire. La variable `NEXT_PUBLIC_API_URL` est configure
 docker compose up --build
 ```
 
-Au demarrage, le backend applique automatiquement les migrations de la base de donnees, puis lance le serveur.
+Au démarrage, le backend applique les migrations, crée le compte administrateur (s'il n'existe pas) puis lance le serveur.
 
-### Acces
+| Accès | URL |
+|---|---|
+| Application | http://localhost:3001 |
+| Mailpit (e-mails envoyés) | http://localhost:8025 |
 
-| Service  | URL                     |
-|----------|-------------------------|
-| Frontend | http://localhost:3001    |
-| Backend  | http://localhost:3000    |
-| PostgreSQL | localhost:5432        |
+- Un compte créé via « Inscription » est **standard**.
+- Le compte **admin** est celui de `ADMIN_EMAIL` / `ADMIN_PASSWORD` ; il accède à la page « Administration » pour supprimer des comptes standard.
+- Tout compte peut se supprimer depuis « Mon Profil ».
 
-### Arreter les services
+## Arrêt
 
 ```bash
-docker compose down
+docker compose down        # arrête les conteneurs
+docker compose down -v     # arrête et supprime aussi les données de la base
 ```
 
-Pour supprimer egalement les donnees de la base :
+## Tests unitaires
 
 ```bash
-docker compose down -v
+cd back && npm ci && npm test
+cd pdf-service && npm ci && npm test
+cd users-service && python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/pytest
+```
+
+## Structure du dépôt
+
+```
+freelanceFlow/
+├── front/            # frontend Next.js
+├── back/             # backend Node.js (API REST principale)
+├── users-service/    # backend Python (comptes)
+├── pdf-service/      # backend Node.js (PDF)
+├── docker-compose.yml
+└── .env.example
 ```
