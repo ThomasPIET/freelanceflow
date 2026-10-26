@@ -1,0 +1,70 @@
+name: back
+
+on:
+  push:
+    branches: ['**']
+    tags: ['*']
+    paths: &paths
+      - 'back/**'
+      - '.github/workflows/back.yml'
+      - '.github/workflows/docker-image.yml'
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+concurrency:
+  group: back-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: back
+
+jobs:
+  quality:
+    name: Lint & format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: back/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+
+  test:
+    name: Unit tests
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: back/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: npm audit --omit=dev --audit-level=high
+
+  image:
+    name: Docker image
+    needs: [test, audit]
+    uses: ./.github/workflows/docker-image.yml
+    with:
+      service: back
+    permissions:
+      contents: read
+      packages: write

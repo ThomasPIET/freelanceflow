@@ -68,6 +68,22 @@ cd pdf-service && npm ci && npm test
 cd users-service && python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/pytest
 ```
 
+## CI/CD (GitHub Actions)
+
+Un workflow par service dans `.github/workflows/` (`back.yml`, `front.yml`, `users-service.yml`, `pdf-service.yml`).
+Il se déclenche à chaque push sur n'importe quelle branche, ne concernant que les fichiers du service, et à chaque tag poussé (tous les services).
+
+| Étape | Contenu |
+|---|---|
+| Lint & format | ESLint + Prettier (Node), ruff (Python), `tsc` pour le front |
+| Unit tests | jest, vitest ou pytest selon le service |
+| Dependency audit | `npm audit --audit-level=high` / `pip-audit` |
+| Docker image | build, scan Trivy (vulnérabilités critiques), push sur GHCR (`docker-image.yml`, workflow réutilisable) |
+
+Les images sont publiées sur `ghcr.io/<owner>/freelanceflow-<service>` avec le SHA du commit comme tag, le nom du tag Git
+pour un tag, et `latest` sur `main`. Chaque étape dépend de la précédente : une erreur arrête le pipeline.
+`back-load-test.yml` lance en plus un test de charge k6 sur `main`.
+
 ## Structure du dépôt
 
 ```

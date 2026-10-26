@@ -1,10 +1,20 @@
-name: Load Tests
+# Test de charge k6 (smoke) du backend : démarre l'API sur une base Postgres éphémère.
+name: back-load-test
 
 on:
-  pull_request:
-    branches:
-      - main
-      - develop
+  push:
+    branches: [main]
+    paths:
+      - 'back/**'
+      - '.github/workflows/back-load-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: back
 
 jobs:
   load-test:
@@ -35,13 +45,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
+          cache-dependency-path: back/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -81,4 +92,4 @@ jobs:
         if: always()
         with:
           name: k6-report
-          path: report.html
+          path: back/report.html

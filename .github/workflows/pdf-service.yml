@@ -1,0 +1,70 @@
+name: pdf-service
+
+on:
+  push:
+    branches: ['**']
+    tags: ['*']
+    paths: &paths
+      - 'pdf-service/**'
+      - '.github/workflows/pdf-service.yml'
+      - '.github/workflows/docker-image.yml'
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+concurrency:
+  group: pdf-service-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: pdf-service
+
+jobs:
+  quality:
+    name: Lint & format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pdf-service/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+
+  test:
+    name: Unit tests
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pdf-service/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: npm audit --omit=dev --audit-level=high
+
+  image:
+    name: Docker image
+    needs: [test, audit]
+    uses: ./.github/workflows/docker-image.yml
+    with:
+      service: pdf-service
+    permissions:
+      contents: read
+      packages: write
