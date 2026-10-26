@@ -20,7 +20,7 @@ Invoice.belongsTo(Client, { foreignKey: 'client_id' });
 Invoice.hasMany(InvoiceLine, { foreignKey: 'invoice_id', onDelete: 'CASCADE' });
 InvoiceLine.belongsTo(Invoice, { foreignKey: 'invoice_id' });
 
-Service.hasMany(InvoiceLine, { foreignKey: 'service_id', onDelete: 'RESTRICT' });
+Service.hasMany(InvoiceLine, { foreignKey: 'service_id', onDelete: 'NO ACTION' });
 InvoiceLine.belongsTo(Service, { foreignKey: 'service_id' });
 
 module.exports = {
