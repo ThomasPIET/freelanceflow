@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'back/**'
+      - 'pdf-service/**'
       - '.github/workflows/back-load-test.yml'
   workflow_dispatch:
 
@@ -42,6 +43,7 @@ jobs:
       JWT_EXPIRES_IN: 24h
       NODE_ENV: test
       PORT: 3000
+      PDF_SERVICE_URL: http://localhost:3002
 
     steps:
       - name: Checkout
@@ -69,6 +71,12 @@ jobs:
 
       - name: Seed load test data
         run: node tests/loads/seed.js
+
+      - name: Start pdf-service
+        working-directory: pdf-service
+        run: |
+          npm ci --omit=dev
+          PORT=3002 node server.js &
 
       - name: Start API server
         run: node server.js &
