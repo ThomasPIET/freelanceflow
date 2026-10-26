@@ -51,10 +51,13 @@ async function remove(req, res, next) {
 
 async function getPdf(req, res, next) {
   try {
-    const { doc, invoiceNumber } = await pdfService.generateInvoicePdf(req.params.id, req.user.id);
+    const { buffer, invoiceNumber } = await pdfService.generateInvoicePdf(
+      req.params.id,
+      req.user.id
+    );
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${invoiceNumber}.pdf"`);
-    doc.pipe(res);
+    res.send(buffer);
   } catch (error) {
     next(error);
   }
@@ -70,22 +73,12 @@ async function sendEmail(req, res, next) {
       transaction
     );
 
-    const { doc, invoiceNumber } = await pdfService.generateInvoicePdf(
+    const { buffer: pdfBuffer, invoiceNumber } = await pdfService.generateInvoicePdf(
       req.params.id,
       req.user.id,
       transaction
     );
     const invoice = await invoiceService.findById(req.params.id, req.user.id, transaction);
-
-    const chunks = [];
-    doc.on('data', (chunk) => chunks.push(chunk));
-
-    await new Promise((resolve, reject) => {
-      doc.on('end', resolve);
-      doc.on('error', reject);
-    });
-
-    const pdfBuffer = Buffer.concat(chunks);
 
     const data = await emailService.sendInvoiceEmail({
       to: invoice.Client.email,

@@ -22,22 +22,8 @@ jest.mock('../models', () => {
   return { Invoice, InvoiceLine, Client, Service, User };
 });
 
-jest.mock('pdfkit', () => {
-  const { PassThrough } = require('stream');
-  return jest.fn().mockImplementation(() => {
-    const stream = new PassThrough();
-    stream.fontSize = jest.fn().mockReturnValue(stream);
-    stream.text = jest.fn().mockReturnValue(stream);
-    stream.moveDown = jest.fn().mockReturnValue(stream);
-    stream.font = jest.fn().mockReturnValue(stream);
-    stream.moveTo = jest.fn().mockReturnValue(stream);
-    stream.lineTo = jest.fn().mockReturnValue(stream);
-    stream.stroke = jest.fn().mockReturnValue(stream);
-    const originalEnd = stream.end.bind(stream);
-    stream.end = jest.fn(() => originalEnd());
-    return stream;
-  });
-});
+global.fetch = jest.fn();
+process.env.PDF_SERVICE_URL = 'http://pdf-service:3000';
 
 const app = require('../app');
 const { Invoice } = require('../models');
@@ -90,6 +76,11 @@ const mockFullInvoice = {
   ],
 };
 
+const pdfResponse = () => ({
+  ok: true,
+  arrayBuffer: async () => Buffer.from('%PDF-1.3 fake'),
+});
+
 describe('GET /api/invoices/:id/pdf', () => {
   let token;
 
@@ -97,6 +88,9 @@ describe('GET /api/invoices/:id/pdf', () => {
     token = generateToken();
     jest.clearAllMocks();
   });
+
+  const getPdf = (id = 1) =>
+    request(app).get(`/api/invoices/${id}/pdf`).set('Authorization', `Bearer ${token}`);
 
   it('should return 401 without token', async () => {
     const res = await request(app).get('/api/invoices/1/pdf');
@@ -106,115 +100,72 @@ describe('GET /api/invoices/:id/pdf', () => {
   it('should return 404 when invoice not found', async () => {
     Invoice.findOne.mockResolvedValue(null);
 
-    const res = await request(app)
-      .get('/api/invoices/999/pdf')
-      .set('Authorization', `Bearer ${token}`);
+    const res = await getPdf(999);
 
     expect(res.status).toBe(404);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('should return PDF with correct headers', async () => {
+  it('should return the PDF from pdf-service with correct headers', async () => {
     Invoice.findOne.mockResolvedValue(mockFullInvoice);
+    fetch.mockResolvedValue(pdfResponse());
 
-    const res = await request(app)
-      .get('/api/invoices/1/pdf')
-      .set('Authorization', `Bearer ${token}`);
+    const res = await getPdf();
 
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toBe('application/pdf');
     expect(res.headers['content-disposition']).toBe('attachment; filename="INV-00001.pdf"');
   });
 
-  it('should generate PDF with invoice data', async () => {
+  it('should send the invoice data to pdf-service', async () => {
     Invoice.findOne.mockResolvedValue(mockFullInvoice);
-    const PDFDocument = require('pdfkit');
+    fetch.mockResolvedValue(pdfResponse());
 
-    const res = await request(app)
-      .get('/api/invoices/1/pdf')
-      .set('Authorization', `Bearer ${token}`);
+    await getPdf();
 
-    expect(res.status).toBe(200);
-    expect(PDFDocument).toHaveBeenCalled();
-
-    const mockDoc = PDFDocument.mock.results[0].value;
-    expect(mockDoc.text).toHaveBeenCalledWith('FACTURE', 350, 45, { width: 200, align: 'right' });
-    expect(mockDoc.text).toHaveBeenCalledWith('ÉMETTEUR', 50, expect.any(Number), { width: 230 });
-    expect(mockDoc.text).toHaveBeenCalledWith(
-      'DESTINATAIRE',
-      expect.any(Number),
-      expect.any(Number),
-      { width: 230, align: 'right' }
-    );
-    expect(mockDoc.text).toHaveBeenCalledWith('John Doe', 50, expect.any(Number), { width: 230 });
-    expect(mockDoc.text).toHaveBeenCalledWith('john@test.com', 50, expect.any(Number), {
-      width: 230,
+    const [url, options] = fetch.mock.calls[0];
+    expect(url).toBe('http://pdf-service:3000/pdf/invoice');
+    expect(options.method).toBe('POST');
+    const body = JSON.parse(options.body);
+    expect(body.invoice_number).toBe('INV-00001');
+    expect(body.issuer).toMatchObject({
+      first_name: 'John',
+      last_name: 'Doe',
+      email: 'john@test.com',
     });
-    expect(mockDoc.text).toHaveBeenCalledWith('Acme Corp', expect.any(Number), expect.any(Number), {
-      width: 230,
-      align: 'right',
-    });
-    expect(mockDoc.text).toHaveBeenCalledWith('Acme Inc', expect.any(Number), expect.any(Number), {
-      width: 230,
-      align: 'right',
-    });
-    expect(mockDoc.text).toHaveBeenCalledWith('Dev Web', expect.any(Number), expect.any(Number), {
-      width: 220,
-    });
+    expect(body.client).toMatchObject({ name: 'Acme Corp', company: 'Acme Inc' });
+    expect(body.invoice).toMatchObject({ total_ht: 150, total_ttc: 180, tva_rate: 20 });
+    expect(body.lines).toEqual([{ label: 'Dev Web', quantity: 2, unit_price: 75, total: 150 }]);
   });
 
-  it('should include totals in PDF', async () => {
-    Invoice.findOne.mockResolvedValue(mockFullInvoice);
-    const PDFDocument = require('pdfkit');
-
-    await request(app).get('/api/invoices/1/pdf').set('Authorization', `Bearer ${token}`);
-
-    const mockDoc = PDFDocument.mock.results[0].value;
-    expect(mockDoc.text).toHaveBeenCalledWith('150.00 EUR', expect.any(Number), expect.any(Number));
-    expect(mockDoc.text).toHaveBeenCalledWith('30.00 EUR', expect.any(Number), expect.any(Number));
-    expect(mockDoc.text).toHaveBeenCalledWith('180.00 EUR', expect.any(Number), expect.any(Number));
-  });
-
-  it('should handle invoice without issued date', async () => {
-    const invoiceNoDate = { ...mockFullInvoice, issued_at: null };
-    Invoice.findOne.mockResolvedValue(invoiceNoDate);
-
-    const res = await request(app)
-      .get('/api/invoices/1/pdf')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.status).toBe(200);
-  });
-
-  it('should handle invoice with multiple lines', async () => {
-    const multiLineInvoice = {
+  it('should label a line without service by its id', async () => {
+    Invoice.findOne.mockResolvedValue({
       ...mockFullInvoice,
-      total_ht: 450,
-      total_ttc: 540,
-      InvoiceLines: [
-        {
-          id: 1,
-          service_id: 1,
-          quantity: 2,
-          unit_price: 75,
-          total: 150,
-          Service: { id: 1, label: 'Dev Web' },
-        },
-        {
-          id: 2,
-          service_id: 2,
-          quantity: 3,
-          unit_price: 100,
-          total: 300,
-          Service: { id: 2, label: 'Design' },
-        },
-      ],
-    };
-    Invoice.findOne.mockResolvedValue(multiLineInvoice);
+      InvoiceLines: [{ service_id: 7, quantity: 1, unit_price: 10, total: 10, Service: null }],
+    });
+    fetch.mockResolvedValue(pdfResponse());
 
-    const res = await request(app)
-      .get('/api/invoices/1/pdf')
-      .set('Authorization', `Bearer ${token}`);
+    await getPdf();
 
-    expect(res.status).toBe(200);
+    expect(JSON.parse(fetch.mock.calls[0][1].body).lines[0].label).toBe('Service #7');
+  });
+
+  it('should return 502 when pdf-service is unreachable', async () => {
+    Invoice.findOne.mockResolvedValue(mockFullInvoice);
+    fetch.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    const res = await getPdf();
+
+    expect(res.status).toBe(502);
+    expect(res.body.message).toBe('PDF service unavailable');
+  });
+
+  it('should return 502 when pdf-service answers an error', async () => {
+    Invoice.findOne.mockResolvedValue(mockFullInvoice);
+    fetch.mockResolvedValue({ ok: false, status: 500 });
+
+    const res = await getPdf();
+
+    expect(res.status).toBe(502);
   });
 });
