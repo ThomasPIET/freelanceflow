@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: freelanceFlow
+      POSTGRES_PASSWORD: freelanceFlow
+      POSTGRES_DB: freelanceFlow
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U freelanceFlow"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: ./back
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./back/.env
+    environment:
+      DATABASE_URL: postgresql://freelanceFlow:freelanceFlow@db:5432/freelanceFlow
+      NODE_ENV: development
+    command: sh -c "npx sequelize-cli db:migrate && node server.js"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./front
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:3000/api
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000/api
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

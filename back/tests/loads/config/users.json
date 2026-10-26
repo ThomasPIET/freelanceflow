@@ -1,0 +1,92 @@
+[
+  {
+    "email": "load_user_1@loadtest.internal",
+    "password": "LoadTest123!",
+    "invoice_ids": [
+      48,
+      49,
+      50
+    ]
+  },
+  {
+    "email": "load_user_2@loadtest.internal",
+    "password": "LoadTest123!",
+    "invoice_ids": [
+      51,
+      52,
+      53
+    ]
+  },
+  {
+    "email": "load_user_3@loadtest.internal",
+    "password": "LoadTest123!",
+    "invoice_ids": [
+      54,
+      55,
+      56
+    ]
+  },
+  {
+    "email": "load_user_4@loadtest.internal",
+    "password": "LoadTest123!",
+    "invoice_ids": [
+      57,
+      58,
+      59
+    ]
+  },
+  {
+    "email": "load_user_5@loadtest.internal",
+    "password": "LoadTest123!",
+    "invoice_ids": [
+      60,
+      61,
+      62
+    ]
+  },
+  {
+    "email": "load_user_6@loadtest.internal",
+    "password": "LoadTest123!",
+    "invoice_ids": [
+      63,
+      64,
+      65
+    ]
+  },
+  {
+    "email": "load_user_7@loadtest.internal",
+    "password": "LoadTest123!",
+    "invoice_ids": [
+      66,
+      67,
+      68
+    ]
+  },
+  {
+    "email": "load_user_8@loadtest.internal",
+    "password": "LoadTest123!",
+    "invoice_ids": [
+      69,
+      70,
+      71
+    ]
+  },
+  {
+    "email": "load_user_9@loadtest.internal",
+    "password": "LoadTest123!",
+    "invoice_ids": [
+      72,
+      73,
+      74
+    ]
+  },
+  {
+    "email": "load_user_10@loadtest.internal",
+    "password": "LoadTest123!",
+    "invoice_ids": [
+      75,
+      76,
+      77
+    ]
+  }
+]

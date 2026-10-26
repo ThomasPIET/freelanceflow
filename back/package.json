@@ -1,0 +1,56 @@
+{
+  "name": "freelanceflow-backend",
+  "version": "1.0.0",
+  "description": "FreelanceFlow REST API — Node.js + Express + Sequelize",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "lint": "eslint \"src/**/*.js\"",
+    "lint:fix": "eslint \"src/**/*.js\" --fix",
+    "format": "prettier --write \"src/**/*.js\"",
+    "format:check": "prettier --check \"src/**/*.js\"",
+    "test": "jest --coverage --passWithNoTests",
+    "test:watch": "jest --watch",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "src/**/*.js": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "csv-stringify": "^6.7.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^8.3.2",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.1.1",
+    "mysql2": "^3.22.0",
+    "node-cache": "^5.1.2",
+    "pdfkit": "^0.18.0",
+    "pg": "^8.12.0",
+    "pg-hstore": "^2.3.4",
+    "resend": "^6.11.0",
+    "sequelize": "^6.37.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.9.0",
+    "eslint": "^9.9.0",
+    "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.1.5",
+    "jest": "^29.7.0",
+    "lint-staged": "^15.2.9",
+    "nodemon": "^3.1.4",
+    "prettier": "^3.3.3",
+    "supertest": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
