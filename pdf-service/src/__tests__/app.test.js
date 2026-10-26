@@ -1,5 +1,31 @@
+const zlib = require('zlib');
 const request = require('supertest');
 const app = require('../app');
+
+// PNG RGBA (couleur 6) dont les données IDAT ne sont pas du zlib valide : pdfkit ne les
+// décode qu'en asynchrone, une erreur à ce moment-là faisait planter tout le processus.
+function corruptRgbaPng() {
+  const chunk = (type, data) => {
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(zlib.crc32(body));
+    return Buffer.concat([length, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(4, 0);
+  ihdr.writeUInt32BE(4, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', Buffer.from('definitely not zlib data')),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+  return `data:image/png;base64,${png.toString('base64')}`;
+}
 
 const PNG_1X1 =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
@@ -83,6 +109,16 @@ describe('POST /pdf/invoice', () => {
     const res = await postPdf(body);
 
     expect(res.status).toBe(200);
+  });
+
+  it('renders without crashing when an RGBA PNG logo has corrupt pixel data', async () => {
+    const body = validBody();
+    body.issuer.logo_data = corruptRgbaPng();
+
+    const res = await postPdf(body);
+
+    expect(res.status).toBe(200);
+    expect(res.body.subarray(0, 4).toString()).toBe('%PDF');
   });
 
   it.each(['invoice_number', 'invoice', 'issuer', 'client', 'lines'])(

@@ -1,4 +1,41 @@
+const zlib = require('zlib');
 const PDFDocument = require('pdfkit');
+
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+// pdfkit décompresse certains PNG (alpha, palette transparente, entrelacés) en asynchrone :
+// une donnée corrompue y lève une exception non rattrapable qui arrête le processus.
+// On valide donc l'image en synchrone avant de la confier à pdfkit.
+function pngPixelDataIsValid(buffer) {
+  const idat = [];
+  let offset = PNG_SIGNATURE.length;
+  while (offset + 8 <= buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.toString('ascii', offset + 4, offset + 8);
+    const end = offset + 8 + length;
+    if (end > buffer.length) return false;
+    if (type === 'IDAT') idat.push(buffer.subarray(offset + 8, end));
+    if (type === 'IEND') break;
+    offset = end + 4;
+  }
+  if (!idat.length) return false;
+  try {
+    zlib.inflateSync(Buffer.concat(idat));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function decodeLogo(logoData) {
+  if (typeof logoData !== 'string') return null;
+  const buffer = Buffer.from(logoData.split(',')[1] ?? '', 'base64');
+  const isJpeg = buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8;
+  const isPng = buffer.subarray(0, 8).equals(PNG_SIGNATURE);
+  if (isJpeg) return buffer;
+  if (isPng && pngPixelDataIsValid(buffer)) return buffer;
+  return null;
+}
 
 function renderInvoicePdf(data) {
   return new Promise((resolve, reject) => {
@@ -22,11 +59,10 @@ function drawInvoice(doc, data) {
     ? new Date(invoice.issued_at).toLocaleDateString('fr-FR')
     : '-';
 
-  if (user.logo_data) {
+  const logo = decodeLogo(user.logo_data);
+  if (logo) {
     try {
-      const base64 = user.logo_data.split(',')[1];
-      const buffer = Buffer.from(base64, 'base64');
-      doc.image(buffer, 50, 45, { fit: [120, 60] });
+      doc.image(logo, 50, 45, { fit: [120, 60] });
     } catch {
       // données corrompues ou format non supporté, on passe
     }
