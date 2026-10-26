@@ -10,7 +10,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Camera, Save, Loader2 } from 'lucide-react';
+import { Camera, Save, Loader2, Trash2 } from 'lucide-react';
+import { userService } from '@/services/user.service';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/svg+xml'];
@@ -19,6 +28,8 @@ export default function ProfilePage() {
   const { user, isLoading: authLoading, refreshUser } = useAuth();
   const [isUpdating, setIsUpdating] = useState(false);
   const [logoLoading, setLogoLoading] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Étape 1 : On met à jour la structure du formulaire
   const [formData, setFormData] = useState({
@@ -96,6 +107,18 @@ export default function ProfilePage() {
       toast.error("Erreur lors de l'upload du logo sur le serveur.");
     } finally {
       setLogoLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      await userService.deleteMe();
+      storageService.clear();
+      window.location.href = '/login';
+    } catch {
+      toast.error('Erreur lors de la suppression du compte.');
+      setIsDeleting(false);
     }
   };
 
@@ -297,6 +320,54 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border-destructive/30 shadow-sm">
+        <CardHeader className="border-b py-4">
+          <CardTitle className="text-destructive text-sm font-semibold tracking-wider uppercase">
+            Supprimer mon compte
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4 py-6 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-muted-foreground text-sm">
+            Cette action supprime définitivement votre compte ainsi que vos
+            clients, prestations et factures.
+          </p>
+          <Button
+            variant="destructive"
+            className="gap-2"
+            onClick={() => setIsDeleteOpen(true)}
+          >
+            <Trash2 size={18} />
+            Supprimer mon compte
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive">
+              Supprimer mon compte
+            </DialogTitle>
+            <DialogDescription>
+              Cette action est irréversible. Toutes vos données seront
+              supprimées.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAccount}
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Suppression...' : 'Confirmer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

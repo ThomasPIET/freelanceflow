@@ -10,12 +10,14 @@ import {
   Briefcase,
   LogOut,
   User,
+  Shield,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
 import { MobileHeader } from './mobile-header';
 import { cn } from '@/lib/utils';
 import { storageService } from '@/services/storage.service';
+import { useAuth } from '@/hooks/useAuth';
 
 const navigation = [
   { name: 'Dashboard', href: '/homepage', icon: LayoutDashboard },
@@ -25,7 +27,20 @@ const navigation = [
   { name: 'Mon Profil', href: '/profile', icon: User },
 ];
 
-function SidebarContent({ pathname }: { pathname: string }) {
+type NavItem = (typeof navigation)[number];
+const adminItem: NavItem = {
+  name: 'Administration',
+  href: '/admin/users',
+  icon: Shield,
+};
+
+function SidebarContent({
+  pathname,
+  items,
+}: {
+  pathname: string;
+  items: NavItem[];
+}) {
   return (
     <>
       <div className="flex h-16 items-center border-b px-6">
@@ -33,7 +48,7 @@ function SidebarContent({ pathname }: { pathname: string }) {
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {navigation.map((item) => {
+        {items.map((item) => {
           const isActive = pathname === item.href;
 
           return (
@@ -75,10 +90,12 @@ function SidebarContent({ pathname }: { pathname: string }) {
 
 function MobileMenu({
   pathname,
+  items,
   isOpen,
   onClose,
 }: {
   pathname: string;
+  items: NavItem[];
   isOpen: boolean;
   onClose: () => void;
 }) {
@@ -107,7 +124,7 @@ function MobileMenu({
           </Button>
         </div>
         <nav className="flex-1 space-y-1 px-3 py-4">
-          {navigation.map((item) => {
+          {items.map((item) => {
             const isActive = pathname === item.href;
 
             return (
@@ -150,6 +167,9 @@ function MobileMenu({
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const items =
+    user?.role === 'admin' ? [...navigation, adminItem] : navigation;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -178,13 +198,14 @@ export function Sidebar() {
 
       {!isMobile && (
         <aside className="bg-background flex h-screen w-64 flex-col border-r">
-          <SidebarContent pathname={pathname} />
+          <SidebarContent pathname={pathname} items={items} />
         </aside>
       )}
 
       {isMobile && (
         <MobileMenu
           pathname={pathname}
+          items={items}
           isOpen={isMobileMenuOpen}
           onClose={handleCloseMenu}
         />
