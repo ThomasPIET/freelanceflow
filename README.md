@@ -60,6 +60,36 @@ docker compose down        # arrête les conteneurs
 docker compose down -v     # arrête et supprime aussi les données de la base
 ```
 
+## Environnements (DEV / TEST / UAT / PROD)
+
+Un seul `docker-compose.yml`, paramétré par un fichier d'environnement. Chaque fichier fixe son propre
+`COMPOSE_PROJECT_NAME` : conteneurs, réseaux et volumes sont séparés, plusieurs environnements peuvent tourner en même temps.
+
+| Env | Fichier | `NODE_ENV` | Front | E-mails |
+|---|---|---|---|---|
+| DEV | `.env` (depuis `.env.example`) | development | `:3001` | Mailpit `:8025` |
+| TEST | `env/test.env` | test | `:3101` | Mailpit `:8125` |
+| UAT | `env/uat.env` | production | `:3201` | Mailpit `:8225` |
+| PROD | `env/prod.env` | production | `:80` | vrai SMTP (Resend), pas de Mailpit |
+
+```bash
+cp env/uat.env.example env/uat.env      # puis remplacer les « change-me »
+docker compose --env-file env/uat.env up -d --build
+docker compose --env-file env/uat.env down
+```
+
+Les fichiers `env/*.env` (avec les secrets) sont ignorés par Git ; seuls les `*.env.example` sont versionnés.
+Mailpit n'est démarré que si `COMPOSE_PROFILES=mail`.
+
+### Bonnes pratiques appliquées dans le compose
+
+- **Limites de ressources** sur chaque service (`deploy.resources.limits` CPU / mémoire, plus une réservation mémoire).
+- **Healthchecks** sur tous les services ; le démarrage suit les dépendances (`depends_on: condition: service_healthy`).
+- **Rotation des logs** (`json-file`, 3 fichiers de 10 Mo max).
+- **Isolation réseau** : réseau `db` interne (sans accès Internet), seuls le front et Mailpit (sur `127.0.0.1`) publient un port.
+- **Conteneurs non-root** pour tous les services applicatifs ; le code du backend est en lecture seule pour l'utilisateur qui l'exécute.
+- **Secrets obligatoires** : `${VAR:?…}` refuse de démarrer si une variable manque.
+
 ## Tests unitaires
 
 ```bash

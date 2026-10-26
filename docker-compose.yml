@@ -1,11 +1,28 @@
+# Une seule définition pour tous les environnements : les valeurs viennent du fichier d'env.
+#   dev  : docker compose up --build                         (lit .env)
+#   test : docker compose --env-file env/test.env up -d --build
+#   uat  : docker compose --env-file env/uat.env up -d --build
+#   prod : docker compose --env-file env/prod.env up -d --build
+# Chaque fichier fixe COMPOSE_PROJECT_NAME : conteneurs, réseaux et volumes sont séparés par environnement.
+
+x-service: &service
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-database-url: &database-url postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+
 services:
   db:
+    <<: *service
     image: postgres:16-alpine
-    restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER manquant dans .env}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant dans .env}
-      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB manquant dans .env}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER manquant}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB manquant}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -13,74 +30,100 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+        reservations: { memory: 128M }
     networks:
       - db
 
   backend:
+    <<: *service
     build: ./back
-    restart: unless-stopped
     environment:
-      NODE_ENV: development
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant dans .env}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL manquant dans .env}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD manquant dans .env}
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: *database-url
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL manquant}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD manquant}
       PDF_SERVICE_URL: http://pdf-service:3000
-      SMTP_HOST: mailpit
-      SMTP_PORT: 1025
-      SMTP_SECURE: "false"
-      MAIL_FROM: factures@freelanceflow.local
-    command: sh -c "npx sequelize-cli db:migrate && node scripts/create-admin.js && node server.js"
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-factures@freelanceflow.local}
     depends_on:
       db:
         condition: service_healthy
       pdf-service:
-        condition: service_started
-      mailpit:
-        condition: service_started
+        condition: service_healthy
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
+        reservations: { memory: 64M }
     networks:
       - app
       - db
 
   users-service:
+    <<: *service
     build: ./users-service
-    restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant dans .env}
+      DATABASE_URL: *database-url
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant}
     depends_on:
       db:
         condition: service_healthy
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
+        reservations: { memory: 64M }
     networks:
       - app
       - db
 
   pdf-service:
+    <<: *service
     build: ./pdf-service
-    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
+        reservations: { memory: 64M }
     networks:
       - app
 
+  # Boîte mail de test : démarrée seulement avec le profil « mail » (dev, test, uat)
   mailpit:
+    <<: *service
     image: axllent/mailpit:v1.32.0
-    restart: unless-stopped
+    profiles: ["mail"]
     ports:
-      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 128M }
     networks:
       - app
 
   frontend:
+    <<: *service
     build:
       context: ./front
       args:
         BACKEND_URL: http://backend:3000
         USERS_SERVICE_URL: http://users-service:8000
-    restart: unless-stopped
     ports:
-      - "3001:3000"
+      - "${FRONT_PORT:-3001}:3000"
     depends_on:
-      - backend
-      - users-service
+      backend:
+        condition: service_healthy
+      users-service:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+        reservations: { memory: 128M }
     networks:
       - app
 

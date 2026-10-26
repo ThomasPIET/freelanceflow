@@ -6,3 +6,8 @@ coverage
 .git
 .github
 .husky
+.vscode
+src/__tests__
+tests
+README.md
+CHANGELOG.md
