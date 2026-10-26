@@ -15,6 +15,26 @@ function computeTotals(lines, tvaRate) {
   return { total_ht: +totalHt.toFixed(2), total_ttc: +totalTtc.toFixed(2) };
 }
 
+function notFound(message) {
+  const error = new Error(message);
+  error.status = 404;
+  return error;
+}
+
+// Une facture ne peut référencer que le client et les prestations de son propriétaire
+async function assertOwnership(userId, { clientId, serviceIds = [] }, transaction) {
+  if (clientId !== undefined && clientId !== null) {
+    const clients = await Client.count({ where: { id: clientId, user_id: userId }, transaction });
+    if (clients !== 1) throw notFound('Client not found');
+  }
+
+  const ids = [...new Set(serviceIds)];
+  if (ids.length) {
+    const services = await Service.count({ where: { id: ids, user_id: userId }, transaction });
+    if (services !== ids.length) throw notFound('Service not found');
+  }
+}
+
 async function findAll(userId) {
   const key = `invoices_${userId}`;
   const cached = cache.get(key);
@@ -54,6 +74,10 @@ async function create(data, userId) {
   const { client_id, tva_rate = 20, date, status, lines = [] } = data;
 
   const parsed = lines.map(parseLine);
+  await assertOwnership(userId, {
+    clientId: client_id,
+    serviceIds: parsed.map((l) => l.service_id),
+  });
   const totals = computeTotals(parsed, tva_rate);
 
   const invoice = await Invoice.create({
@@ -88,6 +112,15 @@ async function update(id, data, userId, transaction) {
   if (date !== undefined) {
     fields.issued_at = date || null;
   }
+
+  await assertOwnership(
+    userId,
+    {
+      clientId: fields.client_id,
+      serviceIds: lines ? lines.map((l) => l.service_id) : [],
+    },
+    transaction
+  );
 
   if (lines) {
     await InvoiceLine.destroy({ where: { invoice_id: id }, transaction });

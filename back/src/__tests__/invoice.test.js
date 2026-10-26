@@ -22,14 +22,14 @@ jest.mock('../models', () => {
     bulkCreate: jest.fn(),
     destroy: jest.fn(),
   };
-  const Client = { findOne: jest.fn() };
-  const Service = {};
+  const Client = { findOne: jest.fn(), count: jest.fn() };
+  const Service = { count: jest.fn() };
   const User = {};
   return { Invoice, InvoiceLine, Client, Service, User };
 });
 
 const app = require('../app');
-const { Invoice, InvoiceLine } = require('../models');
+const { Invoice, InvoiceLine, Client, Service } = require('../models');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 process.env.JWT_SECRET = JWT_SECRET;
@@ -69,6 +69,67 @@ describe('Invoice Routes', () => {
   beforeEach(() => {
     token = generateToken();
     jest.clearAllMocks();
+    // Par défaut, le client et les prestations référencés appartiennent à l'utilisateur
+    Client.count.mockResolvedValue(1);
+    Service.count.mockImplementation(async ({ where }) => where.id.length);
+  });
+
+  describe('Ownership of referenced client and services', () => {
+    it("should refuse to create an invoice with another user's service", async () => {
+      Service.count.mockResolvedValue(0);
+
+      const res = await request(app)
+        .post('/api/invoices')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ client_id: 1, lines: [{ service_id: 99, quantity: 1, unit_price: 10 }] });
+
+      expect(res.status).toBe(404);
+      expect(res.body.message).toBe('Service not found');
+      expect(Service.count).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: [99], user_id: 1 } })
+      );
+      expect(Invoice.create).not.toHaveBeenCalled();
+    });
+
+    it("should refuse to create an invoice for another user's client", async () => {
+      Client.count.mockResolvedValue(0);
+
+      const res = await request(app)
+        .post('/api/invoices')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ client_id: 42, lines: [] });
+
+      expect(res.status).toBe(404);
+      expect(res.body.message).toBe('Client not found');
+      expect(Invoice.create).not.toHaveBeenCalled();
+    });
+
+    it("should refuse to update lines with another user's service", async () => {
+      Invoice.findOne.mockResolvedValue(mockInvoice);
+      Service.count.mockResolvedValue(0);
+
+      const res = await request(app)
+        .put('/api/invoices/1')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ lines: [{ service_id: 99, quantity: 1, unit_price: 10 }] });
+
+      expect(res.status).toBe(404);
+      expect(InvoiceLine.destroy).not.toHaveBeenCalled();
+      expect(mockInvoice.update).not.toHaveBeenCalled();
+    });
+
+    it("should refuse to move an invoice to another user's client", async () => {
+      Invoice.findOne.mockResolvedValue(mockInvoice);
+      Client.count.mockResolvedValue(0);
+
+      const res = await request(app)
+        .put('/api/invoices/1')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ client_id: 42 });
+
+      expect(res.status).toBe(404);
+      expect(mockInvoice.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('Authentication', () => {
