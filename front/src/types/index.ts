@@ -12,6 +12,7 @@ export interface User {
   country?: string;
   created_at: string;
   logo_data?: string;
+  role: 'standard' | 'admin';
 }
 
 export interface AuthResponse {

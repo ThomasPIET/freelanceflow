@@ -1,17 +1,9 @@
 import axios from 'axios';
 import { storageService } from '@/services/storage.service';
 
-// Pour environnement PROD
-/* const api = axios.create({
-  baseURL: '/api/',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-}); */
-
-// Pour environnement DEV
+// Toutes les requêtes passent par le front, qui les relaie aux services internes (next.config.ts)
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  baseURL: '/api',
   headers: {
     'Content-Type': 'application/json',
   },

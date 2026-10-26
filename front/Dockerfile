@@ -9,8 +9,10 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-ARG NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ARG BACKEND_URL=http://backend:3000
+ARG USERS_SERVICE_URL=http://users-service:8000
+ENV BACKEND_URL=$BACKEND_URL \
+    USERS_SERVICE_URL=$USERS_SERVICE_URL
 RUN npx next build --webpack
 
 FROM base AS runner
