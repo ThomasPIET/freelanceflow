@@ -132,7 +132,6 @@ export default function InvoicesPage() {
         issued_at: new Date().toISOString(),
       });
 
-
       await invoiceService.sendEmail(id);
       toast.success('La facture a été envoyée avec succès !', { id: toastId });
       // Optionnel : rafraîchir les données si le statut passe à 'sent' côté back
