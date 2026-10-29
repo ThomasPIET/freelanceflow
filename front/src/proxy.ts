@@ -9,9 +9,11 @@ export default function proxy(request: NextRequest) {
   const isPublicPage =
     request.nextUrl.pathname === '/login' ||
     request.nextUrl.pathname === '/register';
+  // La page d'accueil reste accessible à tous, connecté ou non
+  const isHomePage = request.nextUrl.pathname === '/';
 
   // CAS A : Si l'utilisateur n'a PAS de token et essaie d'accéder à une page privée
-  if (!token && !isPublicPage) {
+  if (!token && !isPublicPage && !isHomePage) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
