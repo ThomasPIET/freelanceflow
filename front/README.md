@@ -1,5 +1,7 @@
 # Freelance Flow Frontend
 
+test
+
 L'application est disponible sur -> freelanceflow.thomaspiet.store
 
 A modern Next.js frontend application for managing freelance business operations, including client management, service tracking, and invoice generation.
